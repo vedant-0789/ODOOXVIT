@@ -1,7 +1,5 @@
 import { OcrProcessResult } from '../../shared-types';
 import Tesseract from 'tesseract.js';
-// @ts-ignore : Suppressing the loose typings of the offline pdf extractor package
-import pdfParse from 'pdf-parse';
 
 /**
  * Completely offline OCR/PDF evaluation using Dual Engines.
@@ -21,7 +19,12 @@ export async function processReceiptImage(
     if (file.type === 'application/pdf') {
        // Rip purely structural text instantly out of the PDF Buffer using PDF.js Core Logic
        console.log("📄 Running PDF structural parser...");
-       const pdfData = await pdfParse(buffer);
+       
+       // Evaluated strictly at runtime inside the function so Next.js Compiler ignores it
+       const pdfExtractor = require('pdf-parse');
+       const pdfAction = typeof pdfExtractor === 'function' ? pdfExtractor : (pdfExtractor.default || pdfExtractor);
+       
+       const pdfData = await pdfAction(buffer);
        text = pdfData.text;
     } else {
        // Ignite the local offline CPU-bound Worker Thread for dirty pixel images

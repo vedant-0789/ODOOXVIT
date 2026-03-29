@@ -20,7 +20,6 @@ import {
   Building2,
   User,
   Users,
-  Settings,
   LogOut,
   ChevronRight,
   Globe,
@@ -42,6 +41,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 <div className="bg-red-500 text-white p-10 text-3xl">
   TEST
 </div>
+import userIcon from '../assets/user.jpg';
+import { useEffect } from 'react';
 // --- Types & Constants ---
 
 type Role = 'Admin' | 'Manager' | 'Employee';
@@ -97,10 +98,10 @@ interface ApprovalRule {
 // --- Mock Data ---
 
 const MOCK_USERS: UserProfile[] = [
-  { id: 'u1', name: 'Alex Rivera', email: 'alex@corp.com', password: 'password123', role: 'Employee', managerId: 'u2', avatar: 'https://picsum.photos/seed/u1/100/100', countryCode: 'US' },
-  { id: 'u2', name: 'Sarah Chen', email: 'sarah@corp.com', password: 'password123', role: 'Manager', managerId: 'u3', avatar: 'https://picsum.photos/seed/u2/100/100', countryCode: 'US' },
-  { id: 'u3', name: 'James Wilson', email: 'admin@example.com', password: 'admin123', role: 'Admin', avatar: 'https://picsum.photos/seed/u3/100/100', countryCode: 'US' },
-  { id: 'u4', name: 'Maria Garcia', email: 'maria@corp.com', password: 'password123', role: 'Employee', managerId: 'u2', avatar: 'https://picsum.photos/seed/u4/100/100', countryCode: 'US' },
+  { id: 'u1', name: 'Alex Rivera', email: 'alex@corp.com', password: 'password123', role: 'Employee', managerId: 'u2', avatar: userIcon, countryCode: 'US' },
+  { id: 'u2', name: 'Sarah Chen', email: 'sarah@corp.com', password: 'password123', role: 'Manager', managerId: 'u3', avatar: userIcon, countryCode: 'US' },
+  { id: 'u3', name: 'James Wilson', email: 'admin@example.com', password: 'admin123', role: 'Admin', avatar: userIcon, countryCode: 'US' },
+  { id: 'u4', name: 'Maria Garcia', email: 'maria@corp.com', password: 'password123', role: 'Employee', managerId: 'u2', avatar: userIcon, countryCode: 'US' },
 ];
 
 const MOCK_EXPENSES: Expense[] = [
@@ -238,6 +239,7 @@ export default function App() {
   const [rules, setRules] = useState<ApprovalRule[]>(MOCK_RULES);
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
 
@@ -267,6 +269,23 @@ export default function App() {
       setAuthError('User not found. Please contact your administrator.');
     }
   };
+
+  const handleForgotPassword = (email: string) => {
+    const foundUser = users.find(
+      u => u.email.toLowerCase() === email.toLowerCase()
+    );
+
+    if (foundUser) {
+      const tempPassword = Math.random().toString(36).slice(-8);
+
+      // update password (demo)
+      foundUser.password = tempPassword;
+
+      alert(`Temporary password sent: ${tempPassword}`);
+    } else {
+      alert("User not found");
+    }
+    };
 
   const handleSignup = (e: React.FormEvent) => {
     e.preventDefault();
@@ -347,7 +366,8 @@ export default function App() {
           <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-indigo-200">
             <Receipt className="text-white" size={28} />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Welcome Back</h1>
+          <h1 className="text-2xl font-bold text-slate-900">ClaimOps</h1>
+          <h3 className="text-2xl font-bold text-slate-900">Welcome Back</h3>
           <p className="text-slate-500 text-sm mt-1">Sign in to manage your reimbursements</p>
         </div>
 
@@ -370,6 +390,11 @@ export default function App() {
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               <input name="password" type="password" placeholder="••••••••" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" required />
+              <div className="flex justify-end">
+              <p className="text-xs text-indigo-600 hover:underline cursor-pointer mt-1" onClick={() => setShowForgot(true)}>
+                Forgot password?
+              </p>
+              </div>
             </div>
           </div>
           <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl shadow-lg shadow-indigo-100 transition-all active:scale-95">
@@ -382,6 +407,38 @@ export default function App() {
           <br />
           <span className="text-[10px] mt-2 block italic">Managers and Employees must be added by an Admin.</span>
         </p>
+          {showForgot && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-xl w-80">
+            <h2 className="text-lg font-bold mb-3">Reset Password</h2>
+
+            <input
+              type="email"
+              placeholder="Enter your email"
+              className="w-full border p-2 rounded mb-3"
+              id="forgotEmail"
+            />
+
+            <button
+              className="bg-indigo-600 text-white px-4 py-2 rounded w-full"
+              onClick={() => {
+                const email = (document.getElementById("forgotEmail") as HTMLInputElement).value;
+                handleForgotPassword(email);
+                setShowForgot(false);
+              }}
+            >
+              Send Reset Password
+            </button>
+
+            <button
+              className="mt-2 text-sm text-gray-500 w-full"
+              onClick={() => setShowForgot(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       </motion.div>
     </div>
   );
@@ -456,7 +513,7 @@ export default function App() {
         <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
           <Receipt className="text-white" size={24} />
         </div>
-        <h1 className="text-xl font-bold tracking-tight text-slate-900">ReimburseMe</h1>
+        <h1 className="text-xl font-bold tracking-tight text-slate-900">ClaimOps</h1>
       </div>
 
       <nav className="space-y-1 flex-1">
@@ -496,11 +553,6 @@ export default function App() {
             Approvals
           </button>
         )}
-
-        <button className="w-full flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-medium transition-colors">
-          <Settings size={20} />
-          Settings
-        </button>
       </nav>
 
       <div className="mt-auto pt-6 border-t border-slate-100">
@@ -826,7 +878,6 @@ export default function App() {
             <section className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-6">
               <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
                 <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600">
-                  <Settings size={20} />
                 </div>
                 <h3 className="font-bold text-slate-900">Rule Information</h3>
               </div>
@@ -1011,7 +1062,10 @@ export default function App() {
 
   const ManagerApprovalView = () => {
     // Show all non-draft expenses so managers can see pending and recently processed items
-    const relevantExpenses = expenses.filter(e => e.status === 'Waiting Approval');
+    
+    const [tab, setTab] = useState<'Pending' | 'History'>('Pending');
+    const relevantExpenses = 
+    tab === 'Pending'? expenses.filter(e => e.status === 'Waiting Approval'): expenses.filter(e => e.status !== 'Waiting Approval');
 
     const handleAction = (id: string, newStatus: Status) => {
       setExpenses(prev => prev.map(e => e.id === id ? { ...e, status: newStatus } : e));
@@ -1024,10 +1078,29 @@ export default function App() {
             <h2 className="text-3xl font-bold text-slate-900">Manager Approvals</h2>
             <p className="text-slate-500 mt-1">Review and process reimbursement requests from your team.</p>
           </div>
-          <div className="flex gap-2 bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
-            <button className="px-4 py-2 text-xs font-bold text-indigo-600 bg-indigo-50 rounded-lg">Pending</button>
-            <button className="px-4 py-2 text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors">History</button>
-          </div>
+          <div className="flex gap-3">
+          <button
+            onClick={() => setTab('Pending')}
+            className={`px-5 py-3 rounded-xl font-semibold flex items-center justify-center transition-all ${
+              tab === 'Pending'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            Pending
+          </button>
+
+          <button
+            onClick={() => setTab('History')}
+            className={`px-5 py-3 rounded-xl font-semibold flex items-center justify-center transition-all ${
+              tab === 'History'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            History
+          </button>
+        </div>
         </header>
 
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
@@ -1156,7 +1229,7 @@ export default function App() {
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
       <Sidebar />
       
-      <main className="lg:ml-64 p-4 md:p-8 lg:p-10 max-w-7xl mx-auto">
+      <main className="lg:ml-64 p-4 md:p-8 lg:p-10 w-full max-w-[1400px]">
         <AnimatePresence mode="wait">
           <motion.div
             key={currentView}
@@ -1174,6 +1247,38 @@ export default function App() {
         </AnimatePresence>
       </main>
 
+{showForgot && (
+  <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+    <div className="bg-white p-6 rounded-xl w-80">
+      <h2 className="text-lg font-bold mb-3">Reset Password</h2>
+
+      <input
+        type="email"
+        placeholder="Enter your email"
+        className="w-full border p-2 rounded mb-3"
+        id="forgotEmail"
+      />
+
+      <button
+        className="bg-indigo-600 text-white px-4 py-2 rounded w-full"
+        onClick={() => {
+          const email = (document.getElementById("forgotEmail") as HTMLInputElement).value;
+          handleForgotPassword(email);
+          setShowForgot(false);
+        }}
+      >
+        Send Reset Password
+      </button>
+
+      <button
+        className="mt-2 text-sm text-gray-500 w-full"
+        onClick={() => setShowForgot(false)}
+      >
+        Cancel
+      </button>
+    </div>
+  </div>
+)}
       {/* Expense Modal */}
       <AnimatePresence>
         {isExpenseModalOpen && (
@@ -1454,7 +1559,13 @@ export default function App() {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Initial Password</label>
-                  <input name="password" type="password" placeholder="••••••••" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all font-medium" required />
+                  <input name="password" type="password" placeholder="••••••••" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl"/>
+                  <p
+                    className="text-xs text-indigo-600 hover:underline cursor-pointer text-right mt-1"
+                    onClick={() => setShowForgot(true)}
+                  >
+                    Forgot password?
+                  </p>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Role</label>

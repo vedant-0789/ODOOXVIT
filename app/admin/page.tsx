@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'next';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 
 type Profile = {
@@ -52,10 +52,10 @@ export default function AdminDashboard() {
       const data = await res.json();
       
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to invite user');
+        throw new Error(data.error || 'Failed to create user');
       }
 
-      setMessage(`User ${name} invited successfully with role ${role}.`);
+      setMessage(`User ${name} created! (Simulated Email) Password sent: ${data.password}`);
       setName('');
       setEmail('');
       fetchUsers();

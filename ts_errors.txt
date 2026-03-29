@@ -1,0 +1,16 @@
+app/signup/page.tsx(3,10): error TS2614: Module '"next"' has no exported member 'useState'. Did you mean to use 'import useState from "next"' instead?
+app/signup/page.tsx(3,20): error TS2614: Module '"next"' has no exported member 'useEffect'. Did you mean to use 'import useEffect from "next"' instead?
+app/signup/page.tsx(44,38): error TS7006: Parameter 'c' implicitly has an 'any' type.
+app/signup/page.tsx(149,33): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/components/App.tsx(101,120): error TS2322: Type 'StaticImageData' is not assignable to type 'string'.
+src/components/App.tsx(102,119): error TS2322: Type 'StaticImageData' is not assignable to type 'string'.
+src/components/App.tsx(103,102): error TS2322: Type 'StaticImageData' is not assignable to type 'string'.
+src/components/App.tsx(104,122): error TS2322: Type 'StaticImageData' is not assignable to type 'string'.
+src/components/App.tsx(903,59): error TS2345: Argument of type 'number' is not assignable to parameter of type 'SetStateAction<string>'.
+src/services/currencyService.ts(1,69): error TS2307: Cannot find module '../shared-types' or its corresponding type declarations.
+src/services/ocrService.ts(1,53): error TS2307: Cannot find module '../shared-types' or its corresponding type declarations.
+src/services/workflowEngine.ts(1,31): error TS2307: Cannot find module '../shared-types' or its corresponding type declarations.
+src/tests/workflow.test.ts(2,31): error TS2307: Cannot find module '../shared-types' or its corresponding type declarations.
+vite.config.ts(2,19): error TS2307: Cannot find module '@vitejs/plugin-react' or its corresponding type declarations.
+vite.config.ts(4,37): error TS2307: Cannot find module 'vite' or its corresponding type declarations.
+vite.config.ts(6,31): error TS7031: Binding element 'mode' implicitly has an 'any' type.

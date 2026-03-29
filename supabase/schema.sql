@@ -27,6 +27,8 @@ CREATE TABLE expenses (
   description TEXT,
   receipt_url TEXT,
   status TEXT DEFAULT 'Draft', -- Draft, Pending, Approved, Rejected
+  approvers JSONB DEFAULT '[]', -- List of {id, status}
+  current_approver_id UUID REFERENCES profiles(id),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -36,7 +38,8 @@ CREATE TABLE approval_rules (
   company_id UUID REFERENCES companies(id),
   is_manager_approver BOOLEAN DEFAULT false,
   min_approval_percentage INT,
-  sequence_enabled BOOLEAN DEFAULT false
+  sequence_enabled BOOLEAN DEFAULT false,
+  approver_ids UUID[] DEFAULT '{}' -- Ordered list of approver profile IDs
 );
 
 -- Add indexes for better query performance

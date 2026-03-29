@@ -1,0 +1,30 @@
+Note: Unnecessary use of -X or --request, POST is already inferred.
+* Host localhost:3000 was resolved.
+* IPv6: ::1
+* IPv4: 127.0.0.1
+  % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+                                 Dload  Upload  Total   Spent   Left   Speed
+  0      0   0      0   0      0      0      0                              0*   Trying [::1]:3000...
+* Established connection to localhost (::1 port 3000) from ::1 port 50256 
+* using HTTP/1.x
+> POST /api/ocr HTTP/1.1
+> Host: localhost:3000
+> User-Agent: curl/8.18.0
+> Accept: */*
+> Content-Length: 1029
+> Content-Type: multipart/form-data; boundary=------------------------QG3nB8AKCaUTtm4wbMJPBx
+> 
+} [1029 bytes data]
+* upload completely sent off: 1029 bytes
+< HTTP/1.1 400 Bad Request
+< vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+< content-type: application/json
+< Date: Sun, 29 Mar 2026 10:45:56 GMT
+< Connection: keep-alive
+< Keep-Alive: timeout=5
+< Transfer-Encoding: chunked
+< 
+{ [47 bytes data]
+100   1065   0     36 100   1029    271   7762                              0100   1065   0     36 100   1029    270   7735                              0100   1065   0     36 100   1029    269   7709                              0
+* Connection #0 to host localhost:3000 left intact
+{"error":"Unsupported file format."}

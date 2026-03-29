@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'next';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 
@@ -41,7 +41,7 @@ export default function SignupPage() {
 
     try {
       // Find currency for selected country
-      const country = countries.find(c => c.name.common === selectedCountry);
+      const country = countries.find((c: any) => c.name.common === selectedCountry);
       let currencyCode = 'USD'; // Default fallback
       if (country && country.currencies) {
         currencyCode = Object.keys(country.currencies)[0] || 'USD';
@@ -146,7 +146,7 @@ export default function SignupPage() {
                 value={selectedCountry}
                 onChange={(e) => setSelectedCountry(e.target.value)}
               >
-                {countries.map((c) => (
+                {countries.map((c: any) => (
                   <option key={c.name.common} value={c.name.common}>
                     {c.name.common}
                   </option>

@@ -64,6 +64,12 @@ const COUNTRIES: Country[] = [
   { name: 'Canada', code: 'CA', currency: 'CAD', symbol: 'CA$' },
 ];
 
+const getCurrencySymbol = (currencies: any) => {
+  if (!currencies) return '$';
+  const firstKey = Object.keys(currencies)[0];
+  return currencies[firstKey].symbol || firstKey;
+};
+
 interface UserProfile {
   id: string;
   name: string;
@@ -237,19 +243,64 @@ export default function App() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [rules, setRules] = useState<ApprovalRule[]>(MOCK_RULES);
+  const [allCountries, setAllCountries] = useState<Country[]>(COUNTRIES);
 
   useEffect(() => {
-    if ((currentView === 'Dashboard' || currentView === 'Users' || currentView === 'ManagerApproval') && user) {
+    const fetchCountries = async () => {
+      try {
+        const res = await fetch('https://restcountries.com/v3.1/all?fields=name,currencies,cca2');
+        const data = await res.json();
+        const formatted = data.map((c: any) => {
+          const currencyKey = Object.keys(c.currencies || {})[0];
+          return {
+            name: c.name.common,
+            code: c.cca2,
+            currency: currencyKey || 'USD',
+            symbol: c.currencies?.[currencyKey]?.symbol || currencyKey || '$'
+          };
+        }).sort((a: any, b: any) => a.name.localeCompare(b.name));
+        setAllCountries(formatted);
+      } catch (e) {
+        console.error("Failed to fetch countries", e);
+      }
+    };
+    fetchCountries();
+  }, []);
+
+  useEffect(() => {
+    if (user) {
       const fetchData = async () => {
+        // Fetch profiles
         const { data: profiles } = await supabase.from('profiles').select('*');
-        if (profiles) setUsers(profiles.map(p => ({
-          id: p.id, name: p.full_name || p.id, email: '', role: p.role, managerId: p.manager_id, avatar: `https://picsum.photos/seed/${p.id}/100/100`, countryCode: p.company_id
-        })));
+        const mappedUsers = profiles?.map(p => ({
+          id: p.id, 
+          name: p.full_name || p.id, 
+          email: '', 
+          role: p.role as Role, 
+          managerId: p.manager_id, 
+          avatar: `https://picsum.photos/seed/${p.id}/100/100`, 
+          countryCode: p.company_id
+        })) || [];
+        setUsers(mappedUsers);
         
-        const { data: expData } = await supabase.from('expenses').select('*');
-        if (expData) setExpenses(expData.map(e => ({
-          id: e.id, userId: e.user_id, title: e.title, category: e.category, amount: Number(e.amount), date: e.date, status: e.status, merchant: e.merchant, paidBy: 'Corporate Card', userName: profiles?.find(p=>p.id === e.user_id)?.full_name || 'User'
-        })));
+        // Fetch expenses
+        const { data: expData } = await supabase.from('expenses').select('*').order('created_at', { ascending: false });
+        if (expData) {
+          setExpenses(expData.map(e => ({
+            id: e.id, 
+            userId: e.employee_id, 
+            title: e.description || 'No Description', 
+            category: e.category || 'General', 
+            amount: Number(e.amount), 
+            date: new Date(e.created_at).toLocaleDateString(), 
+            status: e.status as Status, 
+            merchant: '', 
+            paidBy: 'Corporate Card', 
+            userName: mappedUsers.find(u => u.id === e.employee_id)?.name || 'Unknown User',
+            current_approver_id: e.current_approver_id,
+            approvers: e.approvers
+          })));
+        }
       };
       fetchData();
     }
@@ -281,10 +332,13 @@ export default function App() {
           name: profile.full_name || email.split('@')[0],
           email: email,
           role: profile.role,
+          managerId: profile.manager_id,
           countryCode: profile.company_id, // map company_id pseudo-field
           avatar: `https://picsum.photos/seed/${data.user.id}/100/100`
         });
-        setCurrentView('Dashboard');
+        
+        const targetView = profile.role === 'Admin' ? 'Users' : (profile.role === 'Manager' ? 'ManagerApproval' : 'Dashboard');
+        setCurrentView(targetView as View);
       }
     } catch (err: any) {
       setAuthError(err.message || 'Invalid credentials');
@@ -328,7 +382,7 @@ export default function App() {
       });
       if (res.ok) {
         setUser({ id: data.user.id, name, email, role: 'Admin', countryCode, avatar: `https://picsum.photos/seed/${data.user.id}/100/100` });
-        setCurrentView('Dashboard');
+        setCurrentView('Users'); // Admin default view
       } else {
         const errData = await res.json();
         setAuthError(errData.error || 'Failed to setup company workspace');
@@ -364,6 +418,84 @@ export default function App() {
     } catch (err) {
       alert('Network error');
     }
+  };
+
+  const handleExpenseSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+
+    const formData = new FormData(e.target as HTMLFormElement);
+    const description = formData.get('description') as string;
+    const category = formData.get('category') as string;
+    const expDate = formData.get('date') as string;
+    const inputCurrency = formData.get('currency') as string;
+    const amountVal = parseFloat(formData.get('amount') as string);
+    const paidBy = formData.get('paidBy') as string;
+    const remarks = formData.get('remarks') as string;
+
+    if (!description || !expDate || isNaN(amountVal)) {
+      alert("Please fill out all required fields.");
+      return;
+    }
+
+    let finalAmount = amountVal;
+
+    // Fast Exchange Rate handling
+    if (inputCurrency && inputCurrency !== currency.currency) {
+      try {
+        const res = await fetch(`https://api.exchangerate-api.com/v4/latest/${inputCurrency}`);
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        const rate = data.rates[currency.currency];
+        if (rate) {
+          finalAmount = amountVal * rate;
+        } else {
+          alert('Warning: No exchange rate found, using 1:1');
+        }
+      } catch (err) {
+        alert('Exchange API failed. Try again.');
+        return;
+      }
+    }
+
+    // Fetch rules to see if we have a sequence
+    const { data: rule } = await supabase
+      .from('approval_rules')
+      .select('*')
+      .eq('company_id', user.countryCode)
+      .single();
+
+    let initialApprover = user.managerId;
+    let approverFlow = [];
+
+    if (rule && rule.sequence_enabled && rule.approver_ids?.length > 0) {
+      initialApprover = rule.approver_ids[0];
+      approverFlow = rule.approver_ids.map((id: string) => ({ id, status: 'Pending' }));
+    }
+
+    const { data: exp, error } = await supabase.from('expenses').insert([{
+      employee_id: user.id,
+      amount: finalAmount,
+      currency: inputCurrency || currency.currency,
+      category: category,
+      description: `${description}${remarks ? ` - ${remarks}` : ''}`,
+      status: 'Waiting Approval',
+      current_approver_id: initialApprover,
+      approvers: approverFlow,
+      created_at: new Date(expDate).toISOString()
+    }]).select().single();
+
+    if (error) {
+      alert("Failed to submit expense: " + error.message);
+      return;
+    }
+
+    alert('Expense submitted securely using live rates!');
+    setIsExpenseModalOpen(false);
+    
+    // Quick refresh pattern
+    setCurrentView('Users');
+    setCurrentView('Dashboard');
   };
 
   const handleLogout = () => {
@@ -506,9 +638,9 @@ export default function App() {
               <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               <select 
                 className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all appearance-none"
-                onChange={(e) => setCurrency(COUNTRIES.find(c => c.code === e.target.value) || COUNTRIES[0])}
+                onChange={(e) => setCurrency(allCountries.find(c => c.code === e.target.value) || allCountries[0])}
               >
-                {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name} ({c.currency})</option>)}
+                {allCountries.map(c => <option key={c.code} value={c.code}>{c.name} ({c.currency})</option>)}
               </select>
             </div>
           </div>
@@ -534,13 +666,15 @@ export default function App() {
       </div>
 
       <nav className="space-y-1 flex-1">
-        <button 
-          onClick={() => setCurrentView('Dashboard')}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${currentView === 'Dashboard' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
-        >
-          <LayoutDashboard size={20} />
-          Dashboard
-        </button>
+        {user?.role === 'Employee' && (
+          <button 
+            onClick={() => setCurrentView('Dashboard')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${currentView === 'Dashboard' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
+          >
+            <LayoutDashboard size={20} />
+            My Expenses
+          </button>
+        )}
         
         {user?.role === 'Admin' && (
           <>
@@ -567,7 +701,7 @@ export default function App() {
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${currentView === 'ManagerApproval' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
           >
             <CheckCircle2 size={20} />
-            Approvals
+             All Expenses
           </button>
         )}
       </nav>
@@ -917,7 +1051,7 @@ export default function App() {
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                     <select 
                       value={selectedManager}
-                      onChange={(e) => setSelectedManager(Number(e.target.value))}
+                      onChange={(e: any) => setSelectedManager(e.target.value)}
                       className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all appearance-none font-medium"
                     >
                       {users.filter(u => u.role !== 'Employee').map(u => (
@@ -1081,11 +1215,61 @@ export default function App() {
     // Show all non-draft expenses so managers can see pending and recently processed items
     
     const [tab, setTab] = useState<'Pending' | 'History'>('Pending');
-    const relevantExpenses = 
-    tab === 'Pending'? expenses.filter(e => e.status === 'Waiting Approval'): expenses.filter(e => e.status !== 'Waiting Approval');
+    
+    // Admin sees all. Manager sees only their team.
+    const relevantExpenses = expenses.filter(e => {
+      if (user?.role === 'Admin') return true;
+      if (user?.role === 'Manager') {
+        // If it's a sequence, only the current approver sees it
+        if ((e as any).current_approver_id) {
+          return (e as any).current_approver_id === user.id;
+        }
+        // Fallback: If no sequence is set, the direct reporting manager sees it
+        const employee = users.find(u => u.id === e.userId);
+        return employee?.managerId === user.id;
+      }
+      return false;
+    }).filter(e => tab === 'Pending' ? e.status === 'Waiting Approval' : e.status !== 'Waiting Approval');
 
-    const handleAction = (id: string, newStatus: Status) => {
-      setExpenses(prev => prev.map(e => e.id === id ? { ...e, status: newStatus } : e));
+    const handleAction = async (id: string, newStatus: Status) => {
+      try {
+        const expense = expenses.find(e => e.id === id);
+        if (!expense) return;
+
+        let finalStatus = newStatus;
+        let nextApproverId = null;
+
+        // Sequence logic
+        if (newStatus === 'Approved') {
+          const approvers = (expense as any).approvers || [];
+          const currentIndex = approvers.findIndex((a: any) => a.id === user?.id);
+          
+          if (currentIndex !== -1 && currentIndex < approvers.length - 1) {
+            // Not the last person, just move to next
+            finalStatus = 'Waiting Approval';
+            nextApproverId = approvers[currentIndex + 1].id;
+            
+            // Update the local approver status
+            approvers[currentIndex].status = 'Approved';
+          }
+        }
+
+        const { error } = await supabase
+          .from('expenses')
+          .update({ 
+            status: finalStatus,
+            current_approver_id: nextApproverId,
+            approvers: (expense as any).approvers
+          })
+          .eq('id', id);
+          
+        if (error) throw error;
+        
+        setExpenses(prev => prev.map(e => e.id === id ? { ...e, status: finalStatus, current_approver_id: nextApproverId } : e));
+        alert(nextApproverId ? "Approved! Sent to next manager in sequence." : `Expense ${newStatus} successfully!`);
+      } catch (err: any) {
+        alert("Action failed: " + err.message);
+      }
     };
 
     return (
@@ -1243,7 +1427,7 @@ export default function App() {
   if (currentView === 'Signup') return <SignupPage />;
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 overflow-x-hidden">
       <Sidebar />
       
       <main className="lg:ml-64 p-4 md:p-8 lg:p-10 w-full max-w-[1400px]">
@@ -1313,6 +1497,7 @@ export default function App() {
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl relative z-10 overflow-hidden my-8"
             >
+              <form onSubmit={handleExpenseSubmit}>
               {/* Header & Status Tracker */}
               <div className="p-8 border-b border-slate-100 bg-slate-50/50">
                 <div className="flex justify-between items-start mb-8">
@@ -1365,19 +1550,19 @@ export default function App() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-1.5 md:col-span-2">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Description</label>
-                      <input type="text" placeholder="e.g. Client Dinner at The Bistro" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" />
+                      <input type="text" name="description" placeholder="e.g. Client Dinner at The Bistro" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" required />
                     </div>
                     
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Category</label>
-                      <select className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all appearance-none font-medium">
+                      <select name="category" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all appearance-none font-medium">
                         {rules.map(r => <option key={r.id}>{r.category}</option>)}
                       </select>
                     </div>
 
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Date of Expense</label>
-                      <input type="date" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium" />
+                      <input type="date" name="date" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium" required />
                     </div>
                   </div>
                 </div>
@@ -1392,8 +1577,8 @@ export default function App() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <div className="flex gap-2">
-                        <select className="w-24 px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-indigo-600">
-                          {COUNTRIES.map(c => (
+                        <select name="currency" defaultValue={currency.currency} className="w-24 px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-indigo-600">
+                          {allCountries.map(c => (
                             <option key={c.code} value={c.currency}>
                               {c.currency}
                             </option>
@@ -1402,8 +1587,11 @@ export default function App() {
 
                         <input
                           type="number"
+                          name="amount"
+                          step="0.01"
                           placeholder="0.00"
                           className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                          required
                         />
                       </div>
 
@@ -1414,7 +1602,7 @@ export default function App() {
 
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Paid By</label>
-                      <select className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium">
+                      <select name="paidBy" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium">
                         <option>Personal Card</option>
                         <option>Corporate Card</option>
                         <option>Cash</option>
@@ -1463,17 +1651,21 @@ export default function App() {
                   </div>
 
                   <div className="space-y-4">
-                    <div className="border-2 border-dashed border-slate-200 rounded-2xl p-10 text-center hover:border-indigo-400 hover:bg-indigo-50/30 transition-all cursor-pointer group">
-                      <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-all">
-                        <Upload size={24} />
+                    <label className="border-2 border-dashed border-slate-200 rounded-2xl p-10 text-center transition-all cursor-pointer group block relative overflow-hidden hover:border-indigo-400 hover:bg-indigo-50/30">
+                      <input type="file" className="hidden" accept=".png,.jpg,.jpeg,.pdf" />
+                      <div className="relative z-10">
+                        <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-all">
+                          <Upload size={24} />
+                        </div>
+                        <p className="text-sm font-bold text-slate-700">Click to upload or take a photo of your receipt</p>
+                        <p className="text-xs text-slate-400 mt-1">PNG, JPG or PDF up to 10MB (Manual Entry)</p>
                       </div>
-                      <p className="text-sm font-bold text-slate-700">Click or drag to upload receipt</p>
-                      <p className="text-xs text-slate-400 mt-1">PNG, JPG or PDF up to 10MB</p>
-                    </div>
+                    </label>
 
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Remarks / Notes</label>
                       <textarea 
+                        name="remarks"
                         rows={3} 
                         placeholder="Add any additional context here..." 
                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all resize-none"
@@ -1516,18 +1708,20 @@ export default function App() {
 
               <div className="p-8 bg-slate-50 border-t border-slate-100 flex gap-4">
                 <button 
+                  type="button"
                   onClick={() => setIsExpenseModalOpen(false)} 
                   className="flex-1 px-6 py-4 font-bold text-slate-600 bg-white border border-slate-200 rounded-2xl hover:bg-slate-100 transition-all shadow-sm"
                 >
-                  Save as Draft
+                  Cancel
                 </button>
                 <button 
-                  onClick={() => setIsExpenseModalOpen(false)} 
+                  type="submit"
                   className="flex-1 px-6 py-4 font-bold text-white bg-indigo-600 rounded-2xl hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all active:scale-95"
                 >
                   Submit Request
                 </button>
               </div>
+              </form>
             </motion.div>
           </div>
         )}
@@ -1595,8 +1789,8 @@ export default function App() {
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Reporting Manager</label>
                   <select name="managerId" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all font-medium appearance-none">
                     <option value="">No Manager (Direct Admin Report)</option>
-                    {users.filter(u => u.role === 'Manager' && u.countryCode === user?.countryCode).map(m => (
-                      <option key={m.id} value={m.id}>{m.name}</option>
+                    {users.filter(u => u.role === 'Manager').map(m => (
+                      <option key={m.id} value={m.id}>{m.name} ({m.countryCode})</option>
                     ))}
                   </select>
                 </div>

@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 export default function TestAPIPage() {
   // 1. OCR State
-  const [ocrImage, setOcrImage] = useState('https://example.com/sample-receipt.jpg');
+  const [ocrFile, setOcrFile] = useState<File | null>(null);
   const [ocrResult, setOcrResult] = useState('');
   const [ocrLoading, setOcrLoading] = useState(false);
 
@@ -22,13 +22,16 @@ export default function TestAPIPage() {
   const [wfLoading, setWfLoading] = useState(false);
 
   const testOCR = async () => {
+    if (!ocrFile) return setOcrResult('Please select a physical file first.');
     setOcrLoading(true);
     setOcrResult('Loading...');
     try {
+      const fd = new FormData();
+      fd.append('file', ocrFile);
+
       const res = await fetch('/api/expense/ocr', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image_url: ocrImage })
+        body: fd
       });
       const data = await res.json();
       setOcrResult(JSON.stringify(data, null, 2));
@@ -89,12 +92,12 @@ export default function TestAPIPage() {
           <h2 className="text-2xl font-semibold mb-4 text-blue-600">1. OCR Image Parser</h2>
           <div className="flex flex-col gap-4">
              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Receipt Image URL:</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Upload Receipt (PDF/Image):</label>
                 <input 
-                  type="text" 
-                  value={ocrImage}
-                  onChange={(e) => setOcrImage(e.target.value)}
-                  className="w-full border border-gray-300 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  type="file" 
+                  accept="image/*,application/pdf"
+                  onChange={(e) => setOcrFile(e.target.files?.[0] || null)}
+                  className="w-full border border-gray-300 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                 />
              </div>
              <button 

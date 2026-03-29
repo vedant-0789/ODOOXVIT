@@ -1,11 +1,11 @@
-import { OcrProcessRequest, OcrProcessResult } from '../shared-types';
+import { OcrProcessResult } from '../../shared-types';
 
 /**
- * Connects to the Mindee Expense Receipt API (v5) to parse receipts automatically.
+ * Connects to the Mindee Expense Receipt API (v5) to parse receipts automatically via strict binary uploads.
  * Expects the environment variable MINDEE_API_KEY to be set during deployment.
  */
 export async function processReceiptImage(
-  request: OcrProcessRequest
+  file: Blob | File
 ): Promise<OcrProcessResult> {
   const apiKey = process.env.MINDEE_API_KEY;
   
@@ -16,20 +16,13 @@ export async function processReceiptImage(
   }
 
   try {
-    // 1. Mindee API typically requires raw file streams/blobs, not just image URLs. 
-    // Since Dev 2 sends us an 'image_url' (perhaps from an S3/Supabase upload), 
-    // we fetch it natively first to grab the binary blob.
-    const imageResponse = await fetch(request.image_url);
-    
-    if (!imageResponse.ok) {
-        throw new Error("Unable to download image from the provided URL to pass to OCR.");
-    }
-    
-    const blob = await imageResponse.blob();
+    // 1. Take the physical Blob and package it into a rigid OS formData payload
     const formData = new FormData();
-    formData.append('document', blob, 'receipt.jpg');
+    // Providing a generic fallback filename ensures backend validation compatibility
+    const filename = (file as any).name || 'receipt.pdf';
+    formData.append('document', file, filename);
 
-    // 2. Send the binary formData to Mindee's v5 Engine
+    // 2. Send the binary formData specifically to Mindee's v5 Engine
     const mindeeResponse = await fetch("https://api.mindee.net/v1/products/mindee/expense_receipts/v5/predict", {
       method: "POST",
       headers: {

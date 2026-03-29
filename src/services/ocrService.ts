@@ -39,16 +39,19 @@ export async function processReceiptImage(
     // Merchant Name (Usually the very first legible line on a receipt)
     const merchant_name = lines.length > 0 ? lines[0] : 'Unknown Merchant';
 
-    // Total Amount (Look for matching $XX.XX or raw decimal figures aggressively)
-    const amountRegex = /\$?\d+\.\d{2}/g;
+    // Total Amount (Look for matching $XX.XX or fully comma-separated decimal figures like 1,450.50)
+    // We aggressively demand a `.XX` decimal tail to prevent random Invoice Integers from overpowering the Highest Number mathematical sweep.
+    const amountRegex = /[\d,]+\.\d{2}/g;
     let maxAmount = 0;
     
-    // Iterate all text lines: The highest decimal figure on a receipt is mathematically always the 'Total'
+    // Iterate all text lines: The highest decimal figure on a receipt is mathematically almost always the 'Total' or 'Grand Total'
     lines.forEach(line => {
        const matches = line.match(amountRegex);
        if (matches) {
           matches.forEach(m => {
-             const val = parseFloat(m.replace('$', ''));
+             // Strip commas violently so '1,500.50' transforms into pure '1500.50' for Node engine
+             const cleanNumber = m.replace(/,/g, '');
+             const val = parseFloat(cleanNumber);
              if (!isNaN(val) && val > maxAmount) {
                 maxAmount = val;
              }
@@ -56,18 +59,33 @@ export async function processReceiptImage(
        }
     });
 
-    // Date (Look for MM/DD/YYYY or similar standard American strings)
-    const dateRegex = /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\b/;
+    // Date (Native JavaScript Date constructor crashes heavily on European/Indian DD-MM-YYYY formulas.)
+    // We will slice out the distinct numbers globally and stitch them back into safe ISO strings manually.
+    const dateRegex = /\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/g;
     let expense_date = new Date().toISOString().split('T')[0]; // Safe fallback to today
     
     for (const line of lines) {
-       const match = line.match(dateRegex);
-       if (match) {
-          const parsed = new Date(match[1]);
-          if (!isNaN(parsed.getTime())) {
-             expense_date = parsed.toISOString().split('T')[0];
-             break;
+       const datesFound = [...line.matchAll(dateRegex)];
+       if (datesFound.length > 0) {
+          const [_, p1, p2, p3] = datesFound[0];
+          
+          let day, month, year;
+          year = p3.length === 2 ? '20' + p3 : p3; // Expand '26' to '2026' intelligently
+          
+          if (parseInt(p1) > 12) {
+             // Example: 29-03-2026 mathematically dictates p1 MUST be the Day
+             day = p1; month = p2;
+          } else if (parseInt(p2) > 12) {
+             // Example: 03-29-2026 mathematically dictates p2 MUST be the Day (American formula)
+             month = p1; day = p2;
+          } else {
+             // Fallback baseline: User actively requested DD-MM-YYYY format layout prioritizing day first
+             day = p1; month = p2;
           }
+          
+          // Re-assemble into a perfect ISO 8601 compliant YYYY-MM-DD block mapped strictly for the Supabase DB Date column.
+          expense_date = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+          break; // Snap the absolute first date mathematically printed near the top of the invoice header.
        }
     }
 

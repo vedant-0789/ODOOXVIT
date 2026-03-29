@@ -1,0 +1,27 @@
+# GSD files
+.agent/
+.planning/
+PROJECT.md
+PLAN.md
+UI-SPEC.md
+
+# Gemini (Antigravity) artifacts
+.gemini/
+
+# Node (optional but good to have)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python (if applicable)
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# Windows junk
+Thumbs.db
+ehthumbs.db
+Desktop.ini

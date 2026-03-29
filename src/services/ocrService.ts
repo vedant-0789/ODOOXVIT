@@ -1,68 +1,74 @@
 import { OcrProcessResult } from '../../shared-types';
+import Tesseract from 'tesseract.js';
 
 /**
- * Connects to the Mindee Expense Receipt API (v5) to parse receipts automatically via strict binary uploads.
- * Expects the environment variable MINDEE_API_KEY to be set during deployment.
+ * Completely offline OCR evaluation using Tesseract WebAssembly.
+ * Takes a binary File chunk, translates it into a Buffer, and applies Regex math to extract receipt figures.
  */
 export async function processReceiptImage(
   file: Blob | File
 ): Promise<OcrProcessResult> {
-  const apiKey = process.env.MINDEE_API_KEY;
-  
-  // Clean fallback mechanism to keep the rest of the Hackathon team unblocked
-  if (!apiKey) {
-    console.warn("⚠️ MINDEE_API_KEY is not set globally. Falling back to mock OCR data parsing.");
-    return generateMockOcrResponse();
-  }
-
   try {
-    // 1. Take the physical Blob and package it into a rigid OS formData payload
-    const formData = new FormData();
-    // Providing a generic fallback filename ensures backend validation compatibility
-    const filename = (file as any).name || 'receipt.pdf';
-    formData.append('document', file, filename);
+    // 1. Translate the frontend HTML5 File Blob into a native Node.js Buffer
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
 
-    // 2. Send the binary formData specifically to Mindee's v5 Engine
-    const mindeeResponse = await fetch("https://api.mindee.net/v1/products/mindee/expense_receipts/v5/predict", {
-      method: "POST",
-      headers: {
-        "Authorization": `Token ${apiKey}`
-      },
-      body: formData
+    // 2. Ignite the local offline CPU-bound Worker Thread
+    const { data: { text } } = await Tesseract.recognize(
+      buffer,
+      'eng',
+      // { logger: m => console.log(m) } // Keep silent for cleaner terminal logs
+    );
+
+    // 3. RegEx Deep Extraction Engine
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    
+    // Merchant Name (Usually the very first legible line on a receipt)
+    const merchant_name = lines.length > 0 ? lines[0] : 'Unknown Merchant';
+
+    // Total Amount (Look for matching $XX.XX or raw decimal figures aggressively)
+    const amountRegex = /\$?\d+\.\d{2}/g;
+    let maxAmount = 0;
+    
+    // Iterate all text lines: The highest decimal figure on a receipt is mathematically always the 'Total'
+    lines.forEach(line => {
+       const matches = line.match(amountRegex);
+       if (matches) {
+          matches.forEach(m => {
+             const val = parseFloat(m.replace('$', ''));
+             if (!isNaN(val) && val > maxAmount) {
+                maxAmount = val;
+             }
+          });
+       }
     });
 
-    if (!mindeeResponse.ok) {
-       throw new Error(`Mindee API Failure. Status: ${mindeeResponse.statusText}`);
+    // Date (Look for MM/DD/YYYY or similar standard American strings)
+    const dateRegex = /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\b/;
+    let expense_date = new Date().toISOString().split('T')[0]; // Safe fallback to today
+    
+    for (const line of lines) {
+       const match = line.match(dateRegex);
+       if (match) {
+          const parsed = new Date(match[1]);
+          if (!isNaN(parsed.getTime())) {
+             expense_date = parsed.toISOString().split('T')[0];
+             break;
+          }
+       }
     }
 
-    const mindeeData = await mindeeResponse.json();
-    const document = mindeeData.document.inference.prediction;
-
-    // 3. Destructure Mindee's native response directly to our strict Application DTO
+    // 4. Hydrate the original strict DTO cleanly for the React Frontend Developers
     return {
-      total_amount: document.total_amount.value || 0,
-      expense_date: document.date.value || new Date().toISOString().split('T')[0],
-      category: document.category.value || 'General',
-      merchant_name: document.supplier_name.value || 'Unknown Merchant',
-      // Dynamically stitching a helpful description if the user didn't write one
-      description: `Auto-Expense from ${document.supplier_name.value || 'Unknown Merchant'}` 
+      total_amount: maxAmount > 0 ? maxAmount : 0,
+      expense_date: expense_date,
+      category: 'General Operations', // Dynamic NLP categorization is beyond pure regex
+      merchant_name: merchant_name,
+      description: `Offline Extract: ${merchant_name} via Tesseract.js`
     };
 
   } catch (error: any) {
-    console.error("OCRService Engine Error:", error.message);
-    throw new Error(`OCR processing completely failed: ${error.message}`);
+    console.error("Tesseract Core Offline Error:", error.message);
+    throw new Error(`Local OCR processing violently failed: ${error.message}`);
   }
-}
-
-/**
- * Private Mock payload allowing Dev 2 & 3 to test the UI/DB workflows even if the OCR API triggers limits
- */
-function generateMockOcrResponse(): OcrProcessResult {
-  return {
-    total_amount: 145.50,
-    expense_date: new Date().toISOString().split('T')[0],
-    category: 'Meals & Entertainment',
-    merchant_name: 'Hackathon Pizza Place',
-    description: 'Auto-Expense from Hackathon Pizza Place'
-  };
 }

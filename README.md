@@ -1,11 +1,22 @@
-# ODOOXVIT
-
-## Project Overview
-This repository contains the `ODOOXVIT` project.
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Project Structure
 - `prd.md`: Product Requirements Document
 - `.gitignore`: Files and directories to be ignored by Git (including internal agent/GSD files)
+
+## Getting Started
+
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
 ## Development
 This project incorporates AI-assisted development (GSD/Antigravity).
@@ -37,4 +48,3 @@ The application follows a modular architecture divided into four primary layers:
 - **OCR API**: Parses receipt images and strictly returns parsed JSON (e.g., Mindee or Tesseract).
 - **ExchangeRate API**: Provides live foreign exchange rates.
 - **REST Countries API**: Fetches default country-based currencies during initial onboarding.
-

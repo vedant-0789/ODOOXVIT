@@ -92,10 +92,10 @@ export default function TestAPIPage() {
           <h2 className="text-2xl font-semibold mb-4 text-blue-600">1. OCR Image Parser</h2>
           <div className="flex flex-col gap-4">
              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Upload Receipt (Image JPG/PNG only):</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Upload Receipt (PDF or Image):</label>
                 <input 
                   type="file" 
-                  accept="image/png, image/jpeg, image/jpg"
+                  accept="image/png, image/jpeg, image/jpg, application/pdf"
                   onChange={(e) => setOcrFile(e.target.files?.[0] || null)}
                   className="w-full border border-gray-300 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                 />

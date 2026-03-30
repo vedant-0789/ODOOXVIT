@@ -107,9 +107,9 @@ Open [http://localhost:3000](http://localhost:3000) to see the application in ac
 ---
 
 ## 👥 Hackathon Team
-- **Omsai Rathod** - Backend & Auth Architect
-- **Member 2** - Logic & Integrations Lead (OCR & Approval Engine)
-- **Member 3** - Frontend & UI Designer
+- **Omsai Rathod**
+- **Vedant Patil** 
+- **Vedanti Raut**
 
 ---
 
